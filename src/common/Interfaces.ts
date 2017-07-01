@@ -23,6 +23,7 @@ export interface ReactXP {
     App: App;
     Button: typeof Button;
     Picker: typeof Picker;
+    ChildData: ChildData;
     Clipboard: Clipboard;
     DeviceNetworkType: typeof DeviceNetworkType;
     Image: typeof Image;
@@ -173,6 +174,11 @@ export abstract class Picker extends React.Component<Types.PickerProps, {}> {}
 export class Component<P, T> extends React.Component<P, T> {}
 
 export abstract class Image<S> extends React.Component<Types.ImageProps, S> {}
+
+export abstract class ChildData {
+    abstract provideChildData(childComponent: React.Component<any, any>, data: any): any;
+    abstract applyChildDataProviderMixin(Component: typeof React.Component): void;
+}
 
 export abstract class Clipboard {
     abstract setText(text: string): void;

@@ -23,6 +23,7 @@ import { default as AppImpl, App as AppType } from '../native-common/App';
 import { default as ButtonImpl, Button as ButtonType } from '../native-common/Button';
 import { default as PickerImpl, Picker as PickerType } from '../native-common/Picker';
 import { default as ImageImpl, Image as ImageType } from './Image';
+import { default as ChildDataImpl, ChildData as ChildDataType } from '../common/ChildData';
 import { default as ClipboardImpl, Clipboard as ClipboardType } from '../native-common/Clipboard';
 import { default as GestureViewImpl, GestureView as GestureViewType } from './GestureView';
 import { default as InputImpl, Input as InputType } from '../native-common/Input';
@@ -57,7 +58,7 @@ ViewBase.setDefaultViewStyle(_defaultViewStyle);
 
 // Initialize Android implementation of platform accessibility helpers inside the singleton
 // instance of native-common AccessibilityUtil. This is to let native-common components access
-// platform specific APIs through native-common implementation itself. 
+// platform specific APIs through native-common implementation itself.
 import AccessibilityUtil from '../native-common/AccessibilityUtil';
 import AccessibilityPlatformUtil  from './AccessibilityUtil';
 
@@ -80,6 +81,8 @@ module ReactXP {
     export var Button = ButtonImpl;
     export type Picker = PickerType;
     export var Picker = PickerImpl;
+    export type ChildData = ChildDataType;
+    export var ChildData = ChildDataImpl;
     export type Clipboard = ClipboardType;
     export var Clipboard = ClipboardImpl;
     export type GestureView = GestureViewType;

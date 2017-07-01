@@ -11,6 +11,7 @@ import _ = require('./lodashMini');
 
 import React = require('react');
 import RN = require('react-native');
+import PropTypes = require('prop-types');
 
 import AccessibilityUtil from './AccessibilityUtil';
 
@@ -20,6 +21,10 @@ import Types = require('../common/Types');
 import ViewBase from './ViewBase';
 
 export class View extends ViewBase<Types.ViewProps, {}> {
+    static childContextTypes: React.ValidationMap<any> = {
+        onChildData: PropTypes.func
+    };
+
     private _internalProps: any = {};
 
     constructor(props: Types.ViewProps) {
@@ -30,6 +35,10 @@ export class View extends ViewBase<Types.ViewProps, {}> {
 
     componentWillReceiveProps(nextProps: Types.ViewProps) {
         this._buildInternalProps(nextProps);
+    }
+
+    getChildContext() {
+        return this.props.onChildData ? { onChildData: this.props.onChildData } : {};
     }
 
     /**

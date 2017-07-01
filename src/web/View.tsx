@@ -71,16 +71,24 @@ export interface ViewContext {
     focusManager?: FocusManager;
 }
 
+export interface ViewChildContext {
+    isRxParentAText?: boolean;
+    focusManager?: FocusManager;
+    onChildData?: (data: any) => any;
+}
+
 export class View extends ViewBase<Types.ViewProps, {}> {
     static contextTypes: React.ValidationMap<any> = {
         isRxParentAText: PropTypes.bool,
         focusManager: PropTypes.object
     };
+
     context: ViewContext;
 
     static childContextTypes: React.ValidationMap<any> = {
         isRxParentAText: PropTypes.bool.isRequired,
-        focusManager: PropTypes.object
+        focusManager: PropTypes.object,
+        onChildData: PropTypes.func
     };
 
     private _focusManager: FocusManager;
@@ -202,13 +210,17 @@ export class View extends ViewBase<Types.ViewProps, {}> {
         // Let descendant Types components know that their nearest Types ancestor is not an Types.Text.
         // Because they're in an Types.View, they should use their normal styling rather than their
         // special styling for appearing inline with text.
-        let childContext: ViewContext = {
+        let childContext: ViewChildContext = {
             isRxParentAText: false
         };
 
         // Provide the descendants with the focus manager (if any).
         if (this._focusManager) {
             childContext.focusManager = this._focusManager;
+        }
+
+        if (this.props.onChildData) {
+            childContext.onChildData = this.props.onChildData;
         }
 
         return childContext;

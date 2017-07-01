@@ -567,6 +567,7 @@ export interface ViewPropsShared extends CommonProps, CommonAccessibilityProps {
     onKeyPress?: (e: KeyboardEvent) => void;
     onFocus?: (e: FocusEvent) => void;
     onBlur?: (e: FocusEvent) => void;
+    onChildData?: (data: any) => any; // Handler for the child data (see ChildData module)
 
     // iOS and Android only. Visual touchfeedback properties
     disableTouchOpacityAnimation?: boolean;

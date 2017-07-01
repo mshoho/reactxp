@@ -33,6 +33,7 @@ import { default as AppImpl, App as AppType } from './App';
 import { Button as ButtonImpl } from './Button';
 import { Picker as PickerImpl } from './Picker';
 import { Image as ImageImpl } from './Image';
+import { default as ChildDataImpl, ChildData as ChildDataType } from '../common/ChildData';
 import { default as ClipboardImpl, Clipboard as ClipboardType } from './Clipboard';
 import { GestureView as GestureViewImpl } from './GestureView';
 import { default as InputImpl, Input as InputType } from './Input';
@@ -77,6 +78,8 @@ module ReactXP {
     export var Button = ButtonImpl;
     export type Picker = PickerImpl;
     export var Picker = PickerImpl;
+    export type ChildData = ChildDataType;
+    export var ChildData = ChildDataImpl;
     export type Clipboard = ClipboardType;
     export var Clipboard = ClipboardImpl;
     export type GestureView = GestureViewImpl;
