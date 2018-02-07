@@ -113,7 +113,7 @@ export class WebView extends RX.ViewBase<Types.WebViewProps, WebViewState> imple
             // Set up the global event.
             WebView._onMessageReceived = new RX.Types.SubscribableEvent<
                 (e: WebViewMessageEventInternal) => void>(true);
-            
+
             window.addEventListener('message', (e: MessageEvent) => {
                 let event: WebViewMessageEventInternal = {
                     data: e.data,

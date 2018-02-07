@@ -11,6 +11,7 @@ import React = require('react');
 
 // Use only for type data
 import RX = require('./Interfaces');
+import { AccessibilityFeatures } from '../common/AccessibilityFeatureBase';
 
 export { default as SubscribableEvent, SubscriptionToken } from 'subscribableevent';
 
@@ -352,6 +353,7 @@ export interface CommonProps {
     key?: string | number;
     type?: any;
     children?: ReactNode | ReactNode[];
+    accessibility?: AccessibilityFeatures;
 }
 
 export interface Stateless {}

@@ -21,6 +21,8 @@ import Types = require('../common/Types');
 import UserInterface from './UserInterface';
 import ViewBase from './ViewBase';
 
+import { mergeAccessibilityFeaturesToPropsNativeCommon } from '../common/AccessibilityFeatureBase';
+
 let LayoutAnimation = RN.LayoutAnimation;
 
 // Note: a lot of code is duplicated with Button due to View currently supporting a lot of features Button does.
@@ -391,6 +393,9 @@ export class View extends ViewBase<Types.ViewProps, {}> {
 
     render() {
         let PotentiallyAnimatedView = this._isButton(this.props) ? RN.Animated.View : RN.View;
+        if (this.props.accessibility) {
+            mergeAccessibilityFeaturesToPropsNativeCommon(this.props.accessibility, this._internalProps);
+        }
         return (
             <PotentiallyAnimatedView { ...this._internalProps }>
                 { this.props.children }

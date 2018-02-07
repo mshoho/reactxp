@@ -20,6 +20,8 @@ import Types = require('../common/Types');
 import ViewBase from './ViewBase';
 import { FocusManager, applyFocusableComponentMixin } from './utils/FocusManager';
 
+import { mergeAccessibilityFeaturesToProps } from './AccessibilityFeatures';
+
 const _styles = {
     defaultStyle: {
         position: 'relative',
@@ -309,6 +311,11 @@ export class View extends ViewBase<Types.ViewProps, {}> {
                 </AnimateListEdits>
             );
         } else {
+            if (this.props.accessibility) {
+                // All aria-*, role and tabIndex above should be gone when the new API is done.
+                mergeAccessibilityFeaturesToProps(this.props.accessibility, props);
+            }
+
             reactElement = (
                 <div { ...props } >
                     { this._renderResizeDetectorIfNeeded(combinedStyles) }
