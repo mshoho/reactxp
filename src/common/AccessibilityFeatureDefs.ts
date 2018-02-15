@@ -25,10 +25,6 @@ export interface AccessibilityLabelSettings {
 }
 
 export class AccessibilityLabelDef extends AccessibilityFeatureDef<AccessibilityLabelSettings, void> {
-    static setFeatureProps() {
-        // Nothing to setup.
-    }
-
     getAndroidProps(): AccessibilityPropsAndroid {
         return {
             accessibilityLabel: this.props.label
@@ -61,10 +57,6 @@ export interface AccessibilityHiddenSettings {
 }
 
 export class AccessibilityHiddenDef extends AccessibilityFeatureDef<AccessibilityHiddenSettings, void> {
-    static setFeatureProps() {
-        // Nothing to setup.
-    }
-
     getAndroidProps(): AccessibilityPropsAndroid {
         return {
             accessible: false,

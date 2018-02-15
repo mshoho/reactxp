@@ -44,6 +44,10 @@ export abstract class AccessibilityFeatureDef<E, S> {
     abstract getWebProps(): AccessibilityPropsWeb;
     abstract getMacOSProps(): AccessibilityPropsMacOS;
     abstract getWindowsProps(): AccessibilityPropsWindows;
+
+    static setFeatureProps(props: any) {
+        // Nothing to setup by default.
+    }
 }
 
 export abstract class AccessibilityFeature<E> {
