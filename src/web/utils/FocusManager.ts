@@ -186,6 +186,11 @@ export class FocusManager extends FocusManagerBase {
         let newTabIndex = newAriaHidden || (storedComponent.limitedCountAccessible > 0) ? -1 : undefined;
         const restrictionRemoved = newTabIndex === undefined;
 
+        if (storedComponent.runAfterArbitrationId) {
+            cancelRunAfterArbitration(storedComponent.runAfterArbitrationId);
+            storedComponent.runAfterArbitrationId = undefined;
+        }
+
         if ((storedComponent.curTabIndex !== newTabIndex) || (storedComponent.curAriaHidden !== newAriaHidden)) {
             const el = ReactDOM.findDOMNode(storedComponent.component) as HTMLElement;
 

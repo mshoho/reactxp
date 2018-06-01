@@ -79,6 +79,11 @@ export class FocusManager extends FocusManagerBase {
     }
 
     protected /* static */ _updateComponentFocusRestriction(storedComponent: StoredFocusableComponent) {
+        if (storedComponent.runAfterArbitrationId) {
+            cancelRunAfterArbitration(storedComponent.runAfterArbitrationId);
+            storedComponent.runAfterArbitrationId = undefined;
+        }
+
         if ((storedComponent.restricted || (storedComponent.limitedCount > 0)) && !('origTabIndex' in storedComponent)) {
             storedComponent.origTabIndex = FocusManager._setComponentTabIndexOverride(
                 storedComponent.component as FocusableComponentInternal, -1);

@@ -16,7 +16,9 @@ import Interfaces = require('../../common/Interfaces');
 import {
     FocusArbitratorProvider,
     FocusCandidateType,
-    FocusCandidateInternal
+    FocusCandidateInternal,
+    runAfterArbitration,
+    cancelRunAfterArbitration
 } from '../../common/utils/AutoFocusHelper';
 
 let _lastComponentId: number = 0;
@@ -52,6 +54,7 @@ export interface StoredFocusableComponent {
     curAriaHidden?: boolean;
     removed?: boolean;
     callbacks?: FocusableComponentStateCallback[];
+    runAfterArbitrationId?: number;
 }
 
 export type FocusableComponentStateCallback = (restrictedOrLimited: boolean) => void;
@@ -194,7 +197,19 @@ export abstract class FocusManager {
             if (!(componentId in this._myFocusableComponentIds)) {
                 const storedComponent = FocusManager._allFocusableComponents[componentId];
                 storedComponent.restricted = true;
-                this._updateComponentFocusRestriction(storedComponent);
+
+                if (storedComponent === this._prevFocusedComponent) {
+                    if (storedComponent.runAfterArbitrationId) {
+                        cancelRunAfterArbitration(storedComponent.runAfterArbitrationId);
+                    }
+
+                    storedComponent.runAfterArbitrationId = runAfterArbitration(() => {
+                        storedComponent.runAfterArbitrationId = undefined;
+                        this._updateComponentFocusRestriction(storedComponent);
+                    });
+                } else {
+                    this._updateComponentFocusRestriction(storedComponent);
+                }
             }
         });
 
