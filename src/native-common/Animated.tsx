@@ -113,7 +113,7 @@ class AnimatedTextInput extends AnimatedWrapper<Types.AnimatedTextInputProps, Ty
 }
 
 class AnimatedView extends AnimatedWrapper<Types.AnimatedViewProps, Types.Stateless> {
-    setFocusRestricted(restricted: boolean) {
+    setFocusRestricted(restricted: boolean, callback?: () => void) {
         // Nothing to do.
     }
 
@@ -135,10 +135,10 @@ class AnimatedView extends AnimatedWrapper<Types.AnimatedViewProps, Types.Statel
 }
 
 class FocusRestrictedAnimatedView extends AnimatedView {
-    setFocusRestricted(restricted: boolean) {
+    setFocusRestricted(restricted: boolean, callback?: () => void) {
         const innerComponent = this._mountedComponent ? (this._mountedComponent as any)._component : undefined;
         if (innerComponent && innerComponent.setFocusRestricted) {
-            innerComponent.setFocusRestricted(restricted);
+            innerComponent.setFocusRestricted(restricted, callback);
         }
     }
 

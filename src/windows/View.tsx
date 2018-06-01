@@ -373,7 +373,7 @@ export class View extends ViewCommon implements React.ChildContextProvider<ViewC
         return !!this._popupContainer && this._popupContainer.isHidden();
     }
 
-    setFocusRestricted(restricted: boolean) {
+    setFocusRestricted(restricted: boolean, callback?: () => void) {
         if (!this._focusManager || !this.props.restrictFocusWithin) {
             console.error('View: setFocusRestricted method requires restrictFocusWithin property to be set');
             return;
@@ -381,9 +381,9 @@ export class View extends ViewCommon implements React.ChildContextProvider<ViewC
 
         if (!this._isHidden()) {
             if (restricted) {
-                this._focusManager.restrictFocusWithin(RestrictFocusType.RestrictedFocusFirst);
+                this._focusManager.restrictFocusWithin(RestrictFocusType.RestrictedFocusFirst, false, callback);
             } else {
-                this._focusManager.removeFocusRestriction();
+                this._focusManager.removeFocusRestriction(callback);
             }
         }
         this._isFocusRestricted = restricted;

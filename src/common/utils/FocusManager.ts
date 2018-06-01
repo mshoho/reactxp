@@ -12,6 +12,12 @@ import PropTypes = require('prop-types');
 
 import AppConfig from '../../common/AppConfig';
 import Types = require('../../common/Types');
+import Interfaces = require('../../common/Interfaces');
+import {
+    FocusArbitratorProvider,
+    FocusCandidateType,
+    FocusCandidateInternal
+} from '../../common/utils/AutoFocusHelper';
 
 let _lastComponentId: number = 0;
 
@@ -30,12 +36,12 @@ export interface FocusableInternal {
     focusableComponentId?: string;
 }
 
-export type FocusableComponentInternal = React.Component<any, any> & FocusableInternal;
+export type FocusableComponentInternal = React.Component<any, any> & FocusableInternal & Interfaces.FocusableComponent;
 
 export interface StoredFocusableComponent {
     id: string;
     numericId: number;
-    component: FocusableComponentInternal;
+    component: FocusableComponentInternal & Interfaces.FocusableComponent;
     onFocus: () => void;
     restricted: boolean;
     limitedCount: number;
@@ -60,24 +66,25 @@ export abstract class FocusManager {
     protected static _currentFocusedComponent: StoredFocusableComponent|undefined;
     protected static _allFocusableComponents: { [id: string]: StoredFocusableComponent } = {};
     protected static _skipFocusCheck = false;
-    protected static _resetFocusTimer: number | undefined;
 
     private _parent: FocusManager|undefined;
+    private _rootView: any;
     private _isFocusLimited: Types.LimitFocusType = Types.LimitFocusType.Unlimited;
     private _currentRestrictType: RestrictFocusType = RestrictFocusType.Unrestricted;
     private _prevFocusedComponent: StoredFocusableComponent|undefined;
     protected _myFocusableComponentIds: { [id: string]: boolean } = {};
     private _restrictionStateCallback: FocusManagerRestrictionStateCallback|undefined;
 
-    constructor(parent: FocusManager|undefined) {
+    constructor(parent: FocusManager|undefined, rootView?: any) {
         this._parent = parent;
+        this._rootView = rootView;
     }
 
     protected abstract /* static */ addFocusListenerOnComponent(component: FocusableComponentInternal, onFocus: () => void): void;
     protected abstract /* static */ removeFocusListenerFromComponent(component: FocusableComponentInternal, onFocus: () => void): void;
     protected abstract /* static */ focusComponent(component: FocusableComponentInternal): boolean;
 
-    protected abstract /* static */ resetFocus(focusFirstWhenNavigatingWithKeyboard: boolean) : void;
+    protected abstract /* static */ resetFocus(focusFirstWhenNavigatingWithKeyboard: boolean, callback?: () => void): void;
     protected abstract /* static */ _updateComponentFocusRestriction(storedComponent: StoredFocusableComponent): void;
 
     // Whenever the focusable element is mounted, we let the application
@@ -160,7 +167,7 @@ export abstract class FocusManager {
         }
     }
 
-    restrictFocusWithin(restrictType: RestrictFocusType, noFocusReset?: boolean) {
+    restrictFocusWithin(restrictType: RestrictFocusType, noFocusReset?: boolean, callback?: () => void) {
         // Limit the focus received by the keyboard navigation to all
         // the descendant focusable elements by setting tabIndex of all
         // other elements to -1.
@@ -183,10 +190,6 @@ export abstract class FocusManager {
         FocusManager._restrictionStack.push(this);
         FocusManager._currentRestrictionOwner = this;
 
-        if (!noFocusReset) {
-            this.resetFocus(restrictType === RestrictFocusType.RestrictedFocusFirst);
-        }
-
         Object.keys(FocusManager._allFocusableComponents).forEach(componentId => {
             if (!(componentId in this._myFocusableComponentIds)) {
                 const storedComponent = FocusManager._allFocusableComponents[componentId];
@@ -195,12 +198,18 @@ export abstract class FocusManager {
             }
         });
 
+        if (!noFocusReset) {
+            this.resetFocus(restrictType === RestrictFocusType.RestrictedFocusFirst, callback);
+        } else if (callback) {
+            callback();
+        }
+
         if (this._restrictionStateCallback) {
             this._restrictionStateCallback(restrictType);
         }
     }
 
-    removeFocusRestriction() {
+    removeFocusRestriction(callback?: () => void) {
         // Restore the focus to the previous view with restrictFocusWithin or
         // remove the restriction if there is no such view.
         FocusManager._restrictionStack = FocusManager._restrictionStack.filter(focusManager => focusManager !== this);
@@ -254,9 +263,11 @@ export abstract class FocusManager {
                 }
 
                 if (prevRestrictionOwner) {
-                    prevRestrictionOwner.restrictFocusWithin(prevRestrictionOwner._currentRestrictType, !needsFocusReset);
+                    prevRestrictionOwner.restrictFocusWithin(prevRestrictionOwner._currentRestrictType, !needsFocusReset, callback);
                 } else if (needsFocusReset) {
-                    this.resetFocus(this._currentRestrictType === RestrictFocusType.RestrictedFocusFirst);
+                    this.resetFocus(this._currentRestrictType === RestrictFocusType.RestrictedFocusFirst, callback);
+                } else if (callback) {
+                    callback();
                 }
             }, 100);
         }
@@ -379,6 +390,148 @@ export abstract class FocusManager {
             FocusManager._restoreRestrictionTimer = undefined;
             FocusManager._pendingPrevFocusedComponent = undefined;
         }
+    }
+
+    protected static _isComponentAvailable(storedComponent: StoredFocusableComponent): boolean {
+        return !storedComponent.removed &&
+            !storedComponent.restricted &&
+            storedComponent.limitedCount === 0 &&
+            storedComponent.limitedCountAccessible === 0;
+    }
+
+    protected static _getFirstFocusable(last?: boolean, parent?: FocusManager): StoredFocusableComponent|undefined {
+        let focusables = Object.keys(FocusManager._allFocusableComponents)
+            .filter(componentId => !parent || (componentId in parent._myFocusableComponentIds))
+            .map(componentId => FocusManager._allFocusableComponents[componentId])
+            .filter(FocusManager._isComponentAvailable);
+
+        FocusManager._sortFocusableComponentsByAppearance(focusables);
+
+        focusables = focusables.filter(storedComponent => {
+            const component = storedComponent.component;
+            return component.focus && component.props && ((component.props.tabIndex || 0) >= 0) && !component.props.disabled;
+        });
+
+        if (focusables.length) {
+            return focusables[last ? focusables.length - 1 : 0];
+        }
+
+        return undefined;
+    }
+
+    protected static _sortFocusableComponentsByAppearance(components: StoredFocusableComponent[]) {
+        // This function uses private React API to traverse the rendered components tree to get
+        // the notion of where the component presents in the application structure.
+        // We have a build time test to validate it works in case the API changes.
+        if (components.length <= 1) {
+            return;
+        }
+
+        const tmp = components[0].component;
+        let focusManager: FocusManager|undefined = tmp && tmp.context && tmp.context.focusManager;
+        let rootView: any;
+
+        while (focusManager) {
+            if (focusManager._rootView) {
+                rootView = focusManager._rootView;
+            }
+            focusManager = focusManager._parent;
+        }
+
+        const rootViewInternalInstance: any = rootView && (rootView._reactInternalFiber || rootView._reactInternalInstance);
+
+        if (!rootViewInternalInstance && AppConfig.isDevelopmentMode()) {
+            console.error('FocusManager: cannot find root view');
+            return;
+        }
+
+        const componentOrderMap: { [focusableComponentId: string]: number } = {};
+        let index = 0;
+
+        traverse(rootViewInternalInstance);
+
+        components.sort((a, b) => {
+            if (a.component === b.component) {
+                return 0;
+            }
+
+            const aId = a.component.focusableComponentId;
+            const bId = b.component.focusableComponentId;
+            const aIndex = aId && componentOrderMap[aId];
+            const bIndex = bId && componentOrderMap[bId];
+
+            if (!aIndex) {
+                return 1;
+            } else if (!bIndex) {
+                return -1;
+            }
+
+            return aIndex < bIndex ? -1 : 1;
+        });
+
+        function traverse(internalInstance: any) {
+            const ref = internalInstance.stateNode;
+
+            if (ref && ref.focusableComponentId) {
+                componentOrderMap[ref.focusableComponentId] = index++;
+            }
+
+            if (internalInstance.child) {
+                traverse(internalInstance.child);
+            }
+
+            if (internalInstance.sibling) {
+                traverse(internalInstance.sibling);
+            }
+        }
+    }
+
+    static sortAndFilterAutoFocusCandidates(candidates: FocusCandidateInternal[]): FocusCandidateInternal[] {
+        const filtered: StoredFocusableComponent[] = [];
+
+        for (let i = 0; i < candidates.length; i++) {
+            const candidate = candidates[i];
+            const id = (candidate.component as FocusableComponentInternal).focusableComponentId;
+
+            if (id) {
+                const storedComponent = FocusManager._allFocusableComponents[id];
+
+                if (storedComponent && !(storedComponent as any).__candidate) {
+                    if (!storedComponent.removed && (storedComponent.limitedCount === 0) &&
+                        (storedComponent.limitedCountAccessible === 0)) {
+
+                        filtered.push(storedComponent);
+                        (storedComponent as any).__candidate = candidate;
+                    }
+                }
+            }
+        }
+
+        FocusManager._sortFocusableComponentsByAppearance(filtered);
+
+        return filtered.map(storedComponent => {
+            const candidate: FocusCandidateInternal = (storedComponent as any).__candidate;
+            delete (storedComponent as any).__candidate;
+            return candidate;
+        });
+    }
+
+    protected static _requestFocusFirst(last?: boolean) {
+        let first: StoredFocusableComponent | undefined;
+
+        FocusArbitratorProvider.requestFocus(
+            () => {
+                first = FocusManager._getFirstFocusable(last);
+                return first ? first.component : undefined;
+            },
+            () => {
+                if (first && first.component && first.component.focus) {
+                    first.component.focus();
+                }
+            },
+            () => first ? FocusManager._isComponentAvailable(first) : false,
+            FocusCandidateType.FocusFirst
+        );
     }
 }
 

@@ -526,7 +526,7 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless> {
         return {top: 20, left: 20, right: 20, bottom: 100};
     }
 
-    setFocusRestricted(restricted: boolean) {
+    setFocusRestricted(restricted: boolean, callback?: () => void) {
         // Nothing to do.
     }
 

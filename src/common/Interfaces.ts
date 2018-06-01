@@ -38,7 +38,7 @@ export abstract class AnimatedTextInput extends AnimatedComponent<Types.Animated
 }
 
 export abstract class AnimatedView extends AnimatedComponent<Types.AnimatedViewProps, Types.Stateless> implements FocusableComponent {
-    abstract setFocusRestricted(restricted: boolean): void;
+    abstract setFocusRestricted(restricted: boolean, callback?: () => void): void;
     abstract setFocusLimited(limited: boolean): void;
     abstract focus(): void;
     abstract requestFocus(): void;
@@ -284,7 +284,7 @@ export abstract class UserPresence {
 export abstract class ViewBase<P, S> extends React.Component<P, S> {}
 
 export abstract class View extends ViewBase<Types.ViewProps, any> implements FocusableComponent {
-    abstract setFocusRestricted(restricted: boolean): void;
+    abstract setFocusRestricted(restricted: boolean, callback?: () => void): void;
     abstract setFocusLimited(limited: boolean): void;
     abstract focus(): void;
     abstract requestFocus(): void;

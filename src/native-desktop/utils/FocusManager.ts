@@ -11,6 +11,7 @@ import { FocusManager as FocusManagerBase,
     FocusableComponentInternal as FocusableComponentInternalBase,
     applyFocusableComponentMixin as applyFocusableComponentMixinBase,
     StoredFocusableComponent } from '../../common/utils/FocusManager';
+import { runAfterArbitration, cancelRunAfterArbitration } from '../../common/utils/AutoFocusHelper';
 
 import AppConfig from '../../common/AppConfig';
 import Platform from '../../native-common/Platform';
@@ -36,10 +37,7 @@ export interface FocusableComponentInternal extends FocusManagerFocusableCompone
 }
 
 export class FocusManager extends FocusManagerBase {
-
-    constructor(parent: FocusManager | undefined) {
-        super(parent);
-    }
+    private static _runAfterArbitrationId: number | undefined;
 
     protected /* static */ addFocusListenerOnComponent(component: FocusableComponentInternal, onFocus: () => void): void {
         // We intercept the "onFocus" all the focusable elements have to have
@@ -58,60 +56,25 @@ export class FocusManager extends FocusManagerBase {
         return false;
     }
 
-    private static focusFirst() {
-        const focusable = Object.keys(FocusManager._allFocusableComponents)
-            .map(componentId => FocusManager._allFocusableComponents[componentId])
-            .filter(storedComponent => !storedComponent.removed && !storedComponent.restricted && !storedComponent.limitedCount);
-
-        if (focusable.length) {
-            focusable.sort((a, b) => {
-                // This function does its best, but contrary to DOM-land we have no idea on where the native components
-                // ended up on screen, unless some expensive measuring is done on them.
-                // So we defer to less than optimal "add focusable component" order. A lot of factors (absolute positioning,
-                // instance replacements, etc.) can alter the correctness of this method, but I see no other way.
-                if (a === b) {
-                    return 0;
-                }
-
-                if (a.numericId < b.numericId) {
-                    return -1;
-                } else {
-                    return 1;
-                }
-            });
-
-            let fc = focusable[0].component as FocusableComponentInternal;
-
-            if (fc && fc.focus) {
-                fc.focus();
-            }
-        }
-    }
-
-    protected /* static */ resetFocus(focusFirstWhenNavigatingWithKeyboard: boolean) {
-        if (FocusManager._resetFocusTimer) {
-            clearTimeout(FocusManager._resetFocusTimer);
-            FocusManager._resetFocusTimer = undefined;
+    protected /* static */ resetFocus(focusFirstWhenNavigatingWithKeyboard: boolean, callback?: () => void) {
+        if (FocusManager._runAfterArbitrationId) {
+            cancelRunAfterArbitration(FocusManager._runAfterArbitrationId);
+            FocusManager._runAfterArbitrationId = undefined;
         }
 
         if (UserInterface.isNavigatingWithKeyboard() && focusFirstWhenNavigatingWithKeyboard) {
             // When we're in the keyboard navigation mode, we want to have the
             // first focusable component to be focused straight away, without the
             // necessity to press Tab.
-            // Defer the focusing to let the view finish its initialization and to allow for manual focus setting (if any)
-            // to be processed (the asynchronous nature of focus->onFocus path requires a delay)
-            FocusManager._resetFocusTimer = setTimeout(() => {
-                FocusManager._resetFocusTimer = undefined;
+            FocusManager._requestFocusFirst();
 
-                // Check if the currently focused component is without limit/restriction.
-                // We skip setting focus on "first" component in that case because:
-                // - focusFirst has its limits, to say it gently
-                // - We ended up in resetFocus for a reason that is not true anymore (mostly because focus was set manually)
-                const storedComponent = FocusManager._currentFocusedComponent;
-                if (!storedComponent || storedComponent.removed || storedComponent.restricted || (storedComponent.limitedCount > 0)) {
-                    FocusManager.focusFirst();
-                }
-            }, 500);
+            if (callback) {
+                FocusManager._runAfterArbitrationId = runAfterArbitration(() => {
+                    // Making sure to run after all autoFocus logic is done.
+                    FocusManager._runAfterArbitrationId = undefined;
+                    callback();
+                });
+            }
         }
     }
 

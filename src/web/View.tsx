@@ -273,7 +273,7 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless> {
         }
     }
 
-    setFocusRestricted(restricted: boolean) {
+    setFocusRestricted(restricted: boolean, callback?: () => void) {
         if (!this._focusManager || !this.props.restrictFocusWithin) {
             if (AppConfig.isDevelopmentMode()) {
                 console.error('View: setFocusRestricted method requires restrictFocusWithin property to be set');
@@ -283,9 +283,9 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless> {
 
         if (!this._isHidden()) {
             if (restricted) {
-                this._focusManager.restrictFocusWithin(RestrictFocusType.RestrictedFocusFirst);
+                this._focusManager.restrictFocusWithin(RestrictFocusType.RestrictedFocusFirst, false, callback);
             } else {
-                this._focusManager.removeFocusRestriction();
+                this._focusManager.removeFocusRestriction(callback);
             }
         }
 

@@ -12,10 +12,17 @@ import React = require('react');
 import Types = require('../Types');
 import Interfaces = require('../Interfaces');
 
+const _arbitrateTimeout = 100;
 let _sortAndFilter: SortAndFilterFunc|undefined;
 let _autoFocusTimer: number|undefined;
 let _lastFocusArbitratorProviderId = 0;
-let rootFocusArbitratorProvider: FocusArbitratorProvider;
+let _rootFocusArbitratorProvider: FocusArbitratorProvider;
+let _requestFocusQueue: (() => void)[] = [];
+let _runAfterArbitrationTimer: number|undefined;
+let _runAfterArbitrationCallbacks: ({ id: number, callback: () => void })[] = [];
+let _runAfterArbitrationLastId = 0;
+
+export type FocusCandidateComponent = React.Component<any, any> & Interfaces.FocusableComponent;
 
 export enum FocusCandidateType {
     Focus = 1,
@@ -23,7 +30,7 @@ export enum FocusCandidateType {
 }
 
 export interface FocusCandidateInternal {
-    component: React.Component<any, any>;
+    component: FocusCandidateComponent;
     focus: () => void;
     isAvailable: () => boolean;
     type: FocusCandidateType;
@@ -34,6 +41,39 @@ export type SortAndFilterFunc = (candidates: FocusCandidateInternal[]) => FocusC
 
 export function setSortAndFilterFunc(sortAndFilter: SortAndFilterFunc): void {
     _sortAndFilter = sortAndFilter;
+}
+
+function _runAfterArbitration() {
+    if (_runAfterArbitrationTimer) {
+        clearTimeout(_runAfterArbitrationTimer);
+        _runAfterArbitrationTimer = undefined;
+    }
+
+    if (!_autoFocusTimer) {
+        _runAfterArbitrationTimer = setTimeout(() => {
+            _runAfterArbitrationTimer = undefined;
+
+            if (_runAfterArbitrationCallbacks.length) {
+                _runAfterArbitrationCallbacks.forEach(item => item.callback());
+                _runAfterArbitrationCallbacks = [];
+            }
+        }, _arbitrateTimeout);
+    }
+}
+
+export function runAfterArbitration(callback: () => void): number {
+    _runAfterArbitrationCallbacks.push({
+        id: ++_runAfterArbitrationLastId,
+        callback
+    });
+
+    _runAfterArbitration();
+
+    return _runAfterArbitrationLastId;
+}
+
+export function cancelRunAfterArbitration(id: number) {
+    _runAfterArbitrationCallbacks = _runAfterArbitrationCallbacks.filter(item => item.id !== id);
 }
 
 export class FocusArbitratorProvider {
@@ -47,7 +87,7 @@ export class FocusArbitratorProvider {
     constructor(view?: Interfaces.View, arbitrator?: Types.FocusArbitrator) {
         this._id = ++_lastFocusArbitratorProviderId;
         this._parentArbitratorProvider = view
-            ? ((view.context && view.context.focusArbitrator) || rootFocusArbitratorProvider)
+            ? ((view.context && view.context.focusArbitrator) || _rootFocusArbitratorProvider)
             : undefined;
         this._arbitratorCallback = arbitrator;
     }
@@ -75,8 +115,8 @@ export class FocusArbitratorProvider {
         return FocusArbitratorProvider._arbitrate(candidates, this._arbitratorCallback);
     }
 
-    private _requestFocus(component: React.Component<any, any>, focus: () => void, isAvailable: () => boolean,
-            type: FocusCandidateType): void {
+    private _requestFocus(component: FocusCandidateComponent, focus: () => void,
+        isAvailable: () => boolean, type: FocusCandidateType): void {
 
         const accessibilityId = component.props && component.props.accessibilityId;
 
@@ -147,31 +187,50 @@ export class FocusArbitratorProvider {
         this._arbitratorCallback = arbitrator;
     }
 
-    static requestFocus(component: React.Component<any, any>, focus: () => void, isAvailable: () => boolean,
-            type?: FocusCandidateType): void {
+    static requestFocus(component: FocusCandidateComponent | (() => FocusCandidateComponent | undefined), focus: () => void,
+            isAvailable: () => boolean, type?: FocusCandidateType): void {
 
         if (_autoFocusTimer) {
             clearTimeout(_autoFocusTimer);
         }
 
-        const focusArbitratorProvider: FocusArbitratorProvider =
-            (((component as any)._focusArbitratorProvider instanceof FocusArbitratorProvider) &&
-             (component as any)._focusArbitratorProvider) ||
-            (component.context && component.context.focusArbitrator) ||
-            rootFocusArbitratorProvider;
+        if (_runAfterArbitrationTimer) {
+            clearTimeout(_runAfterArbitrationTimer);
+            _runAfterArbitrationTimer = undefined;
+        }
 
-        focusArbitratorProvider._requestFocus(component, focus, isAvailable, type || FocusCandidateType.Focus);
+        _requestFocusQueue.push(() => {
+            const c = typeof component === 'function' ? component() : component;
+
+            if (c) {
+                const focusArbitratorProvider: FocusArbitratorProvider =
+                    (((c as any)._focusArbitratorProvider instanceof FocusArbitratorProvider) &&
+                    (c as any)._focusArbitratorProvider) ||
+                    (c.context && c.context.focusArbitrator) ||
+                    _rootFocusArbitratorProvider;
+
+                focusArbitratorProvider._requestFocus(c, focus, isAvailable, type || FocusCandidateType.Focus);
+            }
+        });
 
         _autoFocusTimer = setTimeout(() => {
             _autoFocusTimer = undefined;
 
-            const candidate = rootFocusArbitratorProvider._arbitrate();
+            for (let i = 0; i < _requestFocusQueue.length; i++) {
+                _requestFocusQueue[i]();
+            }
+
+            _requestFocusQueue = [];
+
+            const candidate = _rootFocusArbitratorProvider._arbitrate();
 
             if (candidate) {
                 candidate.focus();
             }
-        }, 0);
+
+            _runAfterArbitration();
+        }, _arbitrateTimeout);
     }
 }
 
-rootFocusArbitratorProvider = new FocusArbitratorProvider();
+_rootFocusArbitratorProvider = new FocusArbitratorProvider();

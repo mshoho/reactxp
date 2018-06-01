@@ -767,9 +767,9 @@ function createAnimatedComponent<PropsType extends Types.CommonProps>(Component:
             }
         }
 
-        setFocusRestricted(restricted: boolean) {
+        setFocusRestricted(restricted: boolean, callback?: () => void) {
             if (this._mountedComponent && this._mountedComponent.setFocusRestricted) {
-                this._mountedComponent.setFocusRestricted(restricted);
+                this._mountedComponent.setFocusRestricted(restricted, callback);
             }
         }
 
