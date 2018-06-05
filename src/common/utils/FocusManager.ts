@@ -475,6 +475,9 @@ export abstract class FocusManager {
             const aIndex = aId && componentOrderMap[aId];
             const bIndex = bId && componentOrderMap[bId];
 
+            // Both aIndex and bIndex should be defined after the tree is traversed,
+            // but just in case something is really wrong, we're putting all unknown
+            // components to the end of the array.
             if (!aIndex) {
                 return 1;
             } else if (!bIndex) {
@@ -485,18 +488,46 @@ export abstract class FocusManager {
         });
 
         function traverse(internalInstance: any) {
-            const ref = internalInstance.stateNode;
+            let ref = internalInstance.stateNode;
 
-            if (ref && ref.focusableComponentId) {
-                componentOrderMap[ref.focusableComponentId] = index++;
-            }
+            if (ref) {
+                // New React fiber API.
+                if (ref.focusableComponentId) {
+                    componentOrderMap[ref.focusableComponentId] = ++index;
+                }
 
-            if (internalInstance.child) {
-                traverse(internalInstance.child);
-            }
+                if (internalInstance.child) {
+                    traverse(internalInstance.child);
+                }
 
-            if (internalInstance.sibling) {
-                traverse(internalInstance.sibling);
+                if (internalInstance.sibling) {
+                    traverse(internalInstance.sibling);
+                }
+            } else {
+                // Old React API.
+                ref = internalInstance._instance;
+
+                if (ref && ref.focusableComponentId) {
+                    componentOrderMap[ref.focusableComponentId] = ++index;
+                }
+
+                let c = internalInstance._renderedComponent;
+
+                if (c) {
+                    traverse(c);
+                }
+
+                c = internalInstance._renderedChildren;
+
+                if (c) {
+                    Object.keys(c).forEach(key => {
+                        const child = c[key];
+
+                        if (child) {
+                            traverse(child);
+                        }
+                    });
+                }
             }
         }
     }
