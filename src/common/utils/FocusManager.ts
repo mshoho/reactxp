@@ -488,46 +488,39 @@ export abstract class FocusManager {
         });
 
         function traverse(internalInstance: any) {
-            let ref = internalInstance.stateNode;
+            // Supporting both old API and the new fiber API.
+            let ref = internalInstance.stateNode || internalInstance._instance;
 
-            if (ref) {
-                // New React fiber API.
-                if (ref.focusableComponentId) {
-                    componentOrderMap[ref.focusableComponentId] = ++index;
-                }
+            if (ref && ref.focusableComponentId) {
+                componentOrderMap[ref.focusableComponentId] = ++index;
+            }
 
-                if (internalInstance.child) {
-                    traverse(internalInstance.child);
-                }
+            // New React fiber API.
+            if (internalInstance.child) {
+                traverse(internalInstance.child);
+            }
 
-                if (internalInstance.sibling) {
-                    traverse(internalInstance.sibling);
-                }
-            } else {
-                // Old React API.
-                ref = internalInstance._instance;
+            if (internalInstance.sibling) {
+                traverse(internalInstance.sibling);
+            }
 
-                if (ref && ref.focusableComponentId) {
-                    componentOrderMap[ref.focusableComponentId] = ++index;
-                }
+            // Old React API.
+            let c = internalInstance._renderedComponent;
 
-                let c = internalInstance._renderedComponent;
+            if (c) {
+                traverse(c);
+            }
 
-                if (c) {
-                    traverse(c);
-                }
+            c = internalInstance._renderedChildren;
 
-                c = internalInstance._renderedChildren;
+            if (c) {
+                Object.keys(c).forEach(key => {
+                    const child = c[key];
 
-                if (c) {
-                    Object.keys(c).forEach(key => {
-                        const child = c[key];
-
-                        if (child) {
-                            traverse(child);
-                        }
-                    });
-                }
+                    if (child) {
+                        traverse(child);
+                    }
+                });
             }
         }
     }
