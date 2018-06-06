@@ -237,7 +237,6 @@ export abstract class FocusManager {
             let prevFocusedComponent = this._prevFocusedComponent;
             this._prevFocusedComponent = undefined;
 
-            this._removeFocusRestriction();
             FocusManager._currentRestrictionOwner = undefined;
 
             if (this._restrictionStateCallback) {
@@ -250,9 +249,17 @@ export abstract class FocusManager {
             FocusManager._clearRestoreRestrictionTimeout();
             FocusManager._pendingPrevFocusedComponent = prevFocusedComponent;
 
+            if (prevFocusedComponent) {
+                // Making the previously focused component available right away.
+                prevFocusedComponent.restricted = false;
+                this._updateComponentFocusRestriction(prevFocusedComponent);
+            }
+
             FocusManager._restoreRestrictionTimer = setTimeout(() => {
                 FocusManager._restoreRestrictionTimer = undefined;
                 FocusManager._pendingPrevFocusedComponent = undefined;
+
+                this._removeFocusRestriction();
 
                 const prevRestrictionOwner = FocusManager._restrictionStack.pop();
 

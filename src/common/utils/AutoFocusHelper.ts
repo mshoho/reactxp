@@ -12,7 +12,7 @@ import React = require('react');
 import Types = require('../Types');
 import Interfaces = require('../Interfaces');
 
-const _arbitrateTimeout = 100;
+const _arbitrateTimeout = 0;
 let _sortAndFilter: SortAndFilterFunc|undefined;
 let _autoFocusTimer: number|undefined;
 let _lastFocusArbitratorProviderId = 0;
