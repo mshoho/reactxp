@@ -53,7 +53,7 @@ function applyDesktopBehaviorMixin<TRootViewBase extends Constructor<React.Compo
             super(...args);
             // Initialize the root FocusManager which is aware of all
             // focusable elements.
-            this._focusManager = new FocusManager(undefined, this);
+            this._focusManager = new FocusManager(undefined);
         }
 
         _onTouchStartCapture = (e: SyntheticEvent) => {

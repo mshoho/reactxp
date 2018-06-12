@@ -9,6 +9,7 @@
 
 import React = require('react');
 import PropTypes = require('prop-types');
+import SyncTasks = require('synctasks');
 
 import AppConfig from '../../common/AppConfig';
 import Types = require('../../common/Types');
@@ -69,18 +70,17 @@ export abstract class FocusManager {
     protected static _currentFocusedComponent: StoredFocusableComponent|undefined;
     protected static _allFocusableComponents: { [id: string]: StoredFocusableComponent } = {};
     protected static _skipFocusCheck = false;
+    static _sortFunc: (components: StoredFocusableComponent[]) => SyncTasks.Promise<void>;
 
     private _parent: FocusManager|undefined;
-    private _rootView: any;
     private _isFocusLimited: Types.LimitFocusType = Types.LimitFocusType.Unlimited;
     private _currentRestrictType: RestrictFocusType = RestrictFocusType.Unrestricted;
     private _prevFocusedComponent: StoredFocusableComponent|undefined;
     protected _myFocusableComponentIds: { [id: string]: boolean } = {};
     private _restrictionStateCallback: FocusManagerRestrictionStateCallback|undefined;
 
-    constructor(parent: FocusManager|undefined, rootView?: any) {
+    constructor(parent: FocusManager|undefined) {
         this._parent = parent;
-        this._rootView = rootView;
     }
 
     protected abstract /* static */ addFocusListenerOnComponent(component: FocusableComponentInternal, onFocus: () => void): void;
@@ -421,118 +421,23 @@ export abstract class FocusManager {
             storedComponent.limitedCountAccessible === 0;
     }
 
-    protected static _getFirstFocusable(last?: boolean, parent?: FocusManager): StoredFocusableComponent|undefined {
+    protected static _getFirstFocusable(last?: boolean, parent?: FocusManager): SyncTasks.Promise<StoredFocusableComponent|undefined> {
         let focusables = Object.keys(FocusManager._allFocusableComponents)
             .filter(componentId => !parent || (componentId in parent._myFocusableComponentIds))
             .map(componentId => FocusManager._allFocusableComponents[componentId])
             .filter(FocusManager._isComponentAvailable);
 
-        FocusManager._sortFocusableComponentsByAppearance(focusables);
+        return FocusManager._sortFunc(focusables).then(() => {
+            focusables = focusables.filter(FocusManager._isComponentAvailable).filter(storedComponent => {
+                const component = storedComponent.component;
+                return component.focus && component.props && ((component.props.tabIndex || 0) >= 0) && !component.props.disabled;
+            });
 
-        focusables = focusables.filter(storedComponent => {
-            const component = storedComponent.component;
-            return component.focus && component.props && ((component.props.tabIndex || 0) >= 0) && !component.props.disabled;
-        });
-
-        if (focusables.length) {
             return focusables[last ? focusables.length - 1 : 0];
-        }
-
-        return undefined;
-    }
-
-    protected static _sortFocusableComponentsByAppearance(components: StoredFocusableComponent[]) {
-        // This function uses private React API to traverse the rendered components tree to get
-        // the notion of where the component presents in the application structure.
-        // We have a build time test to validate it works in case the API changes.
-        if (components.length <= 1) {
-            return;
-        }
-
-        const tmp = components[0].component;
-        let focusManager: FocusManager|undefined = tmp && tmp.context && tmp.context.focusManager;
-        let rootView: any;
-
-        while (focusManager) {
-            if (focusManager._rootView) {
-                rootView = focusManager._rootView;
-            }
-            focusManager = focusManager._parent;
-        }
-
-        const rootViewInternalInstance: any = rootView && (rootView._reactInternalFiber || rootView._reactInternalInstance);
-
-        if (!rootViewInternalInstance && AppConfig.isDevelopmentMode()) {
-            console.error('FocusManager: cannot find root view');
-            return;
-        }
-
-        const componentOrderMap: { [focusableComponentId: string]: number } = {};
-        let index = 0;
-
-        traverse(rootViewInternalInstance);
-
-        components.sort((a, b) => {
-            if (a.component === b.component) {
-                return 0;
-            }
-
-            const aId = a.component.focusableComponentId;
-            const bId = b.component.focusableComponentId;
-            const aIndex = aId && componentOrderMap[aId];
-            const bIndex = bId && componentOrderMap[bId];
-
-            // Both aIndex and bIndex should be defined after the tree is traversed,
-            // but just in case something is really wrong, we're putting all unknown
-            // components to the end of the array.
-            if (!aIndex) {
-                return 1;
-            } else if (!bIndex) {
-                return -1;
-            }
-
-            return aIndex < bIndex ? -1 : 1;
         });
-
-        function traverse(internalInstance: any) {
-            // Supporting both old API and the new fiber API.
-            let ref = internalInstance.stateNode || internalInstance._instance;
-
-            if (ref && ref.focusableComponentId) {
-                componentOrderMap[ref.focusableComponentId] = ++index;
-            }
-
-            // New React fiber API.
-            if (internalInstance.child) {
-                traverse(internalInstance.child);
-            }
-
-            if (internalInstance.sibling) {
-                traverse(internalInstance.sibling);
-            }
-
-            // Old React API.
-            let c = internalInstance._renderedComponent;
-
-            if (c) {
-                traverse(c);
-            }
-
-            c = internalInstance._renderedChildren;
-
-            if (c) {
-                Object.keys(c).forEach(key => {
-                    const child = c[key];
-
-                    if (child) {
-                        traverse(child);
-                    }
-                });
-            }
-        }
     }
 
-    static sortAndFilterAutoFocusCandidates(candidates: FocusCandidateInternal[]): FocusCandidateInternal[] {
+    static sortAndFilterAutoFocusCandidates(candidates: FocusCandidateInternal[]): SyncTasks.Promise<FocusCandidateInternal[]> {
         const filtered: StoredFocusableComponent[] = [];
 
         for (let i = 0; i < candidates.length; i++) {
@@ -553,12 +458,12 @@ export abstract class FocusManager {
             }
         }
 
-        FocusManager._sortFocusableComponentsByAppearance(filtered);
-
-        return filtered.map(storedComponent => {
-            const candidate: FocusCandidateInternal = (storedComponent as any).__candidate;
-            delete (storedComponent as any).__candidate;
-            return candidate;
+        return FocusManager._sortFunc(filtered).then(() => {
+            return filtered.map(storedComponent => {
+                const candidate: FocusCandidateInternal = (storedComponent as any).__candidate;
+                delete (storedComponent as any).__candidate;
+                return (FocusManager._isComponentAvailable(storedComponent) ? candidate : undefined) as FocusCandidateInternal;
+            }).filter(candidate => candidate !== undefined);
         });
     }
 
@@ -566,10 +471,10 @@ export abstract class FocusManager {
         let first: StoredFocusableComponent | undefined;
 
         FocusArbitratorProvider.requestFocus(
-            () => {
-                first = FocusManager._getFirstFocusable(last);
-                return first ? first.component : undefined;
-            },
+            FocusManager._getFirstFocusable(last).then(storedComponent => {
+                first = storedComponent;
+                return storedComponent && storedComponent.component;
+            }),
             () => {
                 if (first && first.component && first.component.focus) {
                     first.component.focus();

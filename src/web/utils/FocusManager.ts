@@ -13,6 +13,7 @@ import { FocusManager as FocusManagerBase,
     FocusableComponentInternal,
     StoredFocusableComponent } from '../../common/utils/FocusManager';
 import { runAfterArbitration, cancelRunAfterArbitration } from '../../common/utils/AutoFocusHelper';
+import { sortFocusableComponentsByAppearance } from './FocusableComponentHelpers';
 
 import UserInterface from '../UserInterface';
 
@@ -280,6 +281,8 @@ export class FocusManager extends FocusManagerBase {
         return prev;
     }
 }
+
+FocusManagerBase._sortFunc = sortFocusableComponentsByAppearance;
 
 export function applyFocusableComponentMixin(Component: any, isConditionallyFocusable?: Function) {
     applyFocusableComponentMixinCommon(Component, isConditionallyFocusable);

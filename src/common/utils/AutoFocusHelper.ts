@@ -9,15 +9,19 @@
 */
 
 import React = require('react');
+import SyncTasks = require('synctasks');
+
+import AppConfig from '../../common/AppConfig';
 import Types = require('../Types');
 import Interfaces = require('../Interfaces');
 
 const _arbitrateTimeout = 0;
+let _arbitrateId = 0;
 let _sortAndFilter: SortAndFilterFunc|undefined;
 let _autoFocusTimer: number|undefined;
 let _lastFocusArbitratorProviderId = 0;
 let _rootFocusArbitratorProvider: FocusArbitratorProvider;
-let _requestFocusQueue: (() => void)[] = [];
+let _requestFocusQueue: SyncTasks.Promise<() => void>[] = [];
 let _runAfterArbitrationTimer: number|undefined;
 let _runAfterArbitrationCallbacks: ({ id: number, callback: () => void })[] = [];
 let _runAfterArbitrationLastId = 0;
@@ -37,7 +41,7 @@ export interface FocusCandidateInternal {
     accessibilityId?: string;
 }
 
-export type SortAndFilterFunc = (candidates: FocusCandidateInternal[]) => FocusCandidateInternal[];
+export type SortAndFilterFunc = (candidates: FocusCandidateInternal[]) => SyncTasks.Promise<FocusCandidateInternal[]>;
 
 export function setSortAndFilterFunc(sortAndFilter: SortAndFilterFunc): void {
     _sortAndFilter = sortAndFilter;
@@ -99,20 +103,27 @@ export class FocusArbitratorProvider {
         }
     }
 
-    private _arbitrate(): FocusCandidateInternal | undefined {
-        const candidates = this._candidates;
+    private _arbitrate(): SyncTasks.Promise<FocusCandidateInternal | undefined> {
+        const promises: SyncTasks.Promise<FocusCandidateInternal | undefined>[] = [];
 
-        Object.keys(this._pendingChildren).forEach(key => {
-            const candidate = this._pendingChildren[key]._arbitrate();
-            if (candidate) {
-                candidates.push(candidate);
-            }
-        });
+        Object.keys(this._pendingChildren).forEach(key => promises.push(this._pendingChildren[key]._arbitrate()));
 
-        this._candidates = [];
         this._pendingChildren = {};
 
-        return FocusArbitratorProvider._arbitrate(candidates, this._arbitratorCallback);
+        return SyncTasks.all(promises).then(childCandidates => {
+            const candidates = this._candidates;
+            this._candidates = [];
+
+            for (let i = 0; i < childCandidates.length; i++) {
+                const candidate = childCandidates[i];
+
+                if (candidate) {
+                    candidates.push(candidate);
+                }
+            }
+
+            return FocusArbitratorProvider._arbitrate(candidates, this._arbitratorCallback);
+        });
     }
 
     private _requestFocus(component: FocusCandidateComponent, focus: () => void,
@@ -132,62 +143,66 @@ export class FocusArbitratorProvider {
     }
 
     private static _arbitrate(candidates: FocusCandidateInternal[],
-            arbitrator?: Types.FocusArbitrator): FocusCandidateInternal | undefined {
+            arbitrator?: Types.FocusArbitrator): SyncTasks.Promise<FocusCandidateInternal | undefined> {
         // Filtering out everything which is already unmounted.
         candidates = candidates.filter(item => item.isAvailable());
 
-        if (_sortAndFilter) {
-            candidates = _sortAndFilter(candidates);
+        if (!_sortAndFilter) {
+            return SyncTasks.Rejected('Sort function is not defined');
         }
 
-        for (let i = 0; i < candidates.length; i++) {
-            if (candidates[i].type === FocusCandidateType.FocusFirst) {
-                return candidates[i];
+        return _sortAndFilter(candidates).then(sortedCandidates => {
+            sortedCandidates = sortedCandidates.filter(item => item.isAvailable());
+
+            for (let i = 0; i < sortedCandidates.length; i++) {
+                if (sortedCandidates[i].type === FocusCandidateType.FocusFirst) {
+                    return sortedCandidates[i];
+                }
             }
-        }
 
-        if (arbitrator) {
-            // There is an application specified focus arbitrator.
-            const toArbitrate: Types.FocusCandidate[] = [];
+            if (arbitrator) {
+                // There is an application specified focus arbitrator.
+                const toArbitrate: Types.FocusCandidate[] = [];
 
-            candidates.forEach(candidate => {
-                const component = candidate.component as any;
+                sortedCandidates.forEach(candidate => {
+                    const component = candidate.component as any;
 
-                // Make sure to pass FocusableComponents only.
-                if (component.focus && component.blur && component.requestFocus) {
-                    component.__focusCandidateInternal = candidate;
+                    // Make sure to pass FocusableComponents only.
+                    if (component.focus && component.blur && component.requestFocus) {
+                        component.__focusCandidateInternal = candidate;
 
-                    toArbitrate.push({
-                        component,
-                        accessibilityId: candidate.accessibilityId
-                    });
-                }
-            });
-
-            if (toArbitrate.length) {
-                const candidate = arbitrator(toArbitrate);
-                let ret: FocusCandidateInternal | undefined;
-
-                if (candidate && candidate.component && (candidate.component as any).__focusCandidateInternal) {
-                    ret = (candidate.component as any).__focusCandidateInternal as FocusCandidateInternal;
-                }
-
-                toArbitrate.forEach(candidate => {
-                    delete (candidate.component as any).__focusCandidateInternal;
+                        toArbitrate.push({
+                            component,
+                            accessibilityId: candidate.accessibilityId
+                        });
+                    }
                 });
 
-                return ret;
-            }
-        }
+                if (toArbitrate.length) {
+                    const candidate = arbitrator(toArbitrate);
+                    let ret: FocusCandidateInternal | undefined;
 
-        return candidates[candidates.length - 1];
+                    if (candidate && candidate.component && (candidate.component as any).__focusCandidateInternal) {
+                        ret = (candidate.component as any).__focusCandidateInternal as FocusCandidateInternal;
+                    }
+
+                    toArbitrate.forEach(candidate => {
+                        delete (candidate.component as any).__focusCandidateInternal;
+                    });
+
+                    return ret;
+                }
+            }
+
+            return sortedCandidates[sortedCandidates.length - 1];
+        });
     }
 
     setCallback(arbitrator?: Types.FocusArbitrator) {
         this._arbitratorCallback = arbitrator;
     }
 
-    static requestFocus(component: FocusCandidateComponent | (() => FocusCandidateComponent | undefined), focus: () => void,
+    static requestFocus(component: FocusCandidateComponent | SyncTasks.Promise<FocusCandidateComponent | undefined>, focus: () => void,
             isAvailable: () => boolean, type?: FocusCandidateType): void {
 
         if (_autoFocusTimer) {
@@ -199,9 +214,15 @@ export class FocusArbitratorProvider {
             _runAfterArbitrationTimer = undefined;
         }
 
-        _requestFocusQueue.push(() => {
-            const c = typeof component === 'function' ? component() : component;
+        let promise: SyncTasks.Promise<FocusCandidateComponent | undefined>;
 
+        if (typeof (component as any).then === 'function') {
+            promise = component as SyncTasks.Promise<FocusCandidateComponent | undefined>;
+        } else {
+            promise = SyncTasks.Resolved<FocusCandidateComponent>(component as FocusCandidateComponent);
+        }
+
+        _requestFocusQueue.push(promise.then((c: FocusCandidateComponent | undefined) => () => {
             if (c) {
                 const focusArbitratorProvider: FocusArbitratorProvider =
                     (((c as any)._focusArbitratorProvider instanceof FocusArbitratorProvider) &&
@@ -211,24 +232,40 @@ export class FocusArbitratorProvider {
 
                 focusArbitratorProvider._requestFocus(c, focus, isAvailable, type || FocusCandidateType.Focus);
             }
-        });
+        }));
 
         _autoFocusTimer = setTimeout(() => {
             _autoFocusTimer = undefined;
 
-            for (let i = 0; i < _requestFocusQueue.length; i++) {
-                _requestFocusQueue[i]();
-            }
+            const curArbitrateId = ++_arbitrateId;
+
+            SyncTasks.all(_requestFocusQueue).then(queue => {
+                if (curArbitrateId !== _arbitrateId) {
+                    return;
+                }
+
+                for (let i = 0; i < queue.length; i++) {
+                    queue[i]();
+                }
+
+                _rootFocusArbitratorProvider._arbitrate().then(candidate => {
+                    if (curArbitrateId !== _arbitrateId) {
+                        return;
+                    }
+
+                    if (candidate) {
+                        candidate.focus();
+                    }
+
+                    _runAfterArbitration();
+                });
+            }).catch(err => {
+                if (AppConfig.isDevelopmentMode()) {
+                    console.error('FocusArbitratorProvider: something went wrong', err);
+                }
+            });
 
             _requestFocusQueue = [];
-
-            const candidate = _rootFocusArbitratorProvider._arbitrate();
-
-            if (candidate) {
-                candidate.focus();
-            }
-
-            _runAfterArbitration();
         }, _arbitrateTimeout);
     }
 }

@@ -12,6 +12,7 @@ import { FocusManager as FocusManagerBase,
     applyFocusableComponentMixin as applyFocusableComponentMixinBase,
     StoredFocusableComponent } from '../../common/utils/FocusManager';
 import { runAfterArbitration, cancelRunAfterArbitration } from '../../common/utils/AutoFocusHelper';
+import { sortFocusableComponentsByAppearance } from '../../native-common/utils/FocusableComponentHelpers';
 
 import AppConfig from '../../common/AppConfig';
 import Platform from '../../native-common/Platform';
@@ -116,6 +117,8 @@ export class FocusManager extends FocusManagerBase {
         updateNativeTabIndex(component);
     }
 }
+
+FocusManagerBase._sortFunc = sortFocusableComponentsByAppearance;
 
 function updateNativeTabIndex(component: FocusableComponentInternal) {
     // Call special method on component avoiding state changes/re-renderings
